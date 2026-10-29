@@ -1,0 +1,20 @@
+{
+  "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+  "revision": "main",
+  "mode": "separate",
+  "tasks": ["misinfo", "hasoc", "constraint"],
+  "data_root": "/kaggle/input/your-dataset/data",
+  "output_dir": "/kaggle/working/llama31_outputs",
+  "seed": 42,
+  "max_length": 512,
+  "epochs": 2,
+  "learning_rate": 0.0001,
+  "lora_r": 16,
+  "grad_accum": 8,
+  "num_gpus": 2,
+  "smoke_test": true,
+  "smoke_steps": 10,
+  "eval_steps": 50,
+  "save_total_limit": 2,
+  "resume_from_checkpoint": null
+}
