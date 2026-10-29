@@ -15,9 +15,9 @@ The counts above describe the uploaded files after documented cleanup, with seed
 Use [the notebook](notebooks/kaggle_llama31.ipynb), or copy the numbered cells from [KAGGLE_CELLS.md](docs/KAGGLE_CELLS.md). Both follow the same procedure:
 
 1. Select T4 × 2, enable Internet, and attach the uploaded `data` folder as a private Kaggle Dataset.
-2. Attach `llama31-kaggle-source.zip` as another Kaggle Dataset, or attach a GitHub ZIP download containing this repo. You do not need to expose a GitHub token to Kaggle.
+2. Run the first notebook cell to clone this public repository directly. Rerunning it pulls updates with `git pull --ff-only`. No GitHub token or source ZIP is needed.
 3. Accept the [Meta model license/access terms](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct). Add a valid read token as Kaggle Secret **HF_TOKEN**, enabled for the notebook. Revoke any token previously pasted into chat; do not put the replacement in a cell.
-4. Extract the source, install pinned packages, set the data root, run preflight and data checks, then the 10-step smoke run.
+4. Clone the source, install pinned packages, set the data root, run preflight and data checks, then the 10-step smoke run.
 5. Use `smoke_test=false` for the full run. Evaluate validation first. Once settings are final, run the separate final-test cell.
 6. Save Version with notebook outputs, or download the adapter/report archive before the session ends.
 

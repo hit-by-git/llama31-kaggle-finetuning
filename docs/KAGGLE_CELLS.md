@@ -1,40 +1,28 @@
 # Cells to paste into Kaggle
 
-These cells use the source ZIP attached as a Kaggle Dataset. The same cells are in `notebooks/kaggle_llama31.ipynb`. No credential is included.
+These cells clone the public repository directly. No GitHub token or source ZIP is needed. Attach only your data as a private Kaggle Dataset. The same cells are in `notebooks/kaggle_llama31.ipynb`.
 
-## 1. Extract the uploaded source
+## 1. Clone the public repository
 
-In Kaggle enable Internet and select **T4 × 2**. Attach both your original `data` folder and the supplied source ZIP as private Kaggle Datasets. This code accepts the supplied ZIP or a GitHub ZIP download. Your dataset folder should retain `splits/`, `HASOC_eng/` and `constraint_aaai2021/`.
+In Kaggle enable Internet and select **T4 × 2**. Attach your original `data` folder as a private Kaggle Dataset, retaining `splits/`, `HASOC_eng/` and `constraint_aaai2021/`. The code repository is public, so cloning requires no GitHub token or source ZIP. Rerunning this cell pulls updates using a fast-forward merge; local code modifications cause Git to stop rather than overwrite them.
 
 ```python
 from pathlib import Path
 import zipfile, sys, subprocess, os, json
 
-SOURCE_ZIP = None  # Set this if you attached more than one source archive.
-if SOURCE_ZIP is None:
-    candidates = []
-    for p in Path("/kaggle/input").rglob("*.zip"):
-        if not zipfile.is_zipfile(p):
-            continue
-        with zipfile.ZipFile(p) as z:
-            if any(n.endswith("src/llama31_finetune/run.py") for n in z.namelist()):
-                candidates.append(p)
-    if len(candidates) != 1:
-        raise ValueError(f"Set SOURCE_ZIP to the attached code archive: {candidates}")
-    SOURCE_ZIP = candidates[0]
-DEST = Path("/kaggle/working/llama31_source")
-DEST.mkdir(parents=True, exist_ok=True)
-with zipfile.ZipFile(SOURCE_ZIP) as z:
-    for member in z.infolist():
-        target = (DEST / member.filename).resolve()
-        if not target.is_relative_to(DEST.resolve()):
-            raise ValueError("Unsafe archive path")
-    z.extractall(DEST)
-roots = list(DEST.rglob("src/llama31_finetune/run.py"))
-if len(roots) != 1:
-    raise ValueError(f"Expected one extracted project, found {roots}")
-REPO = roots[0].parents[2]
+REPO_URL = "https://github.com/hit-by-git/llama31-kaggle-finetuning.git"
+REPO = Path("/kaggle/working/llama31-kaggle-finetuning")
+if not REPO.exists():
+    subprocess.run(["git", "clone", "--depth", "1", REPO_URL, str(REPO)], check=True)
+elif (REPO / ".git").is_dir():
+    origin = subprocess.check_output(["git", "-C", str(REPO), "remote", "get-url", "origin"], text=True).strip()
+    if origin != REPO_URL:
+        raise ValueError(f"Existing folder belongs to a different repository: {origin}")
+    subprocess.run(["git", "-C", str(REPO), "pull", "--ff-only"], check=True)
+else:
+    raise ValueError(f"Folder exists without Git metadata: {REPO}; select a new REPO path")
 print("Project:", REPO)
+print("Commit:", subprocess.check_output(["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True).strip())
 ```
 
 ## 2. Install dependencies
