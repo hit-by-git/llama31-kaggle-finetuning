@@ -14,10 +14,17 @@ from .modeling import load_base, load_tokenizer
 from .prompting import CompletionCollator, encode_row
 from .sampling import combine_tasks
 from .provenance import split_fingerprints, prompt_contract
+from .checkpoints import export_adapter
 
 
 class TaskValidationTrainer(Trainer):
     """Average per-task answer loss while retaining each validation distribution."""
+    def _save_checkpoint(self, model, trial):
+        rank = self.args.process_index
+        print(f"[rank {rank}] Saving checkpoint at step {self.state.global_step}", flush=True)
+        super()._save_checkpoint(model, trial)
+        print(f"[rank {rank}] Checkpoint write finished", flush=True)
+
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         selected = self.eval_dataset if eval_dataset is None else eval_dataset
         if not isinstance(selected, dict):
@@ -114,16 +121,23 @@ def main():
         fp16=True, bf16=False, optim="paged_adamw_8bit", max_grad_norm=0.3,
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
         eval_strategy="steps", eval_steps=interval, save_strategy="steps", save_steps=interval,
-        save_total_limit=cfg["save_total_limit"], load_best_model_at_end=True,
+        save_total_limit=cfg["save_total_limit"], load_best_model_at_end=False,
         metric_for_best_model="eval_mean_task_loss", greater_is_better=False, prediction_loss_only=True,
         logging_steps=1 if cfg["smoke_test"] else 10, ddp_find_unused_parameters=False,
         report_to="none", seed=cfg["seed"], data_seed=cfg["seed"], dataloader_num_workers=0,
-        label_names=["labels"])
+        label_names=["labels"], ddp_timeout=300)
     trainer = TaskValidationTrainer(model=model, args=training_args, train_dataset=encoded["train"],
                       eval_dataset=encoded["val"], data_collator=CompletionCollator(tok), processing_class=tok)
     trainer.train(resume_from_checkpoint=cfg["resume_from_checkpoint"])
-    trainer.save_model(str(out / "adapter"))
+    print(f"[rank {rank}] Training loop returned", flush=True)
+    # Avoid Trainer's conditional end-of-training NCCL barrier/reload. Select the
+    # same best validation checkpoint and copy its saved LoRA files on rank 0.
     if trainer.is_world_process_zero():
+        best = trainer.state.best_model_checkpoint
+        if best is None:
+            raise RuntimeError("No best checkpoint was saved; inspect checkpoint progress logs")
+        print(f"[rank {rank}] Exporting best adapter from {best}", flush=True)
+        export_adapter(best, out / "adapter")
         tok.save_pretrained(out / "adapter")
         manifest = {"smoke_test": cfg["smoke_test"], "tasks": args.tasks,
                     "best_checkpoint": trainer.state.best_model_checkpoint,
@@ -134,6 +148,11 @@ def main():
                     "cleaning_audit": {t: v["train"].attrs.get("cleaning_audit", {}) for t, v in split_sets.items()}}
         (out / "training_summary.json").write_text(json.dumps(manifest, indent=2))
         (out / "training_history.json").write_text(json.dumps(trainer.state.log_history, indent=2))
+        print(f"[rank {rank}] Adapter and metadata saved: {out / 'adapter'}", flush=True)
+    if torch.distributed.is_initialized():
+        print(f"[rank {rank}] Releasing distributed process group", flush=True)
+        torch.distributed.destroy_process_group()
+    print(f"[rank {rank}] Worker finished", flush=True)
 
 
 if __name__ == "__main__":
